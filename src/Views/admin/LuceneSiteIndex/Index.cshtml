@@ -1,0 +1,88 @@
+﻿
+@{
+    Layout = null;
+
+}
+@using EPiServer.Core
+@using EPiServer.Web
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Reindex site using Lucene</title>
+    <link rel="stylesheet" type="text/css" href="/EPiServer/Shell/11.12.1/ClientResources/epi/themes/legacy/ShellCore.css">
+    <script type="text/javascript" src="/EPiServer/Shell/11.12.1/ClientResources/ShellCore.js"></script>
+    <link rel="stylesheet" type="text/css" href="/EPiServer/Shell/11.12.1/ClientResources/epi/themes/legacy/ShellCoreLightTheme.css">
+    <link rel="stylesheet" type="text/css" href="/App_Themes/Default/Styles/system.css" />
+    <style>
+        .mg-top-10 {
+            margin-top: 10px !important;
+        }
+
+        .folder-section {
+            width: 50%;
+            float: left;
+            columns: 4;
+        }
+
+        .field-validation-error {
+            color: red;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="epi-padding">
+        <div class="epi-contentContainer epi-fullWidth">
+            <div class="epi-formArea">
+                @if (ViewBag.Message != null)
+                {
+                    <h2>Result</h2>
+                    <div id="jobStatus" class="EP-systemMessage" style="display: block;">
+                        @Html.Raw(ViewBag.Message)
+                    </div>
+                }
+                @if (ViewBag.SiteList != null)
+                {
+            <div class="epi-size15">
+                @{
+                    var siteList = (List<SiteDefinition>)ViewBag.SiteList;
+                    <h2>Select a site to reindex</h2>
+                    using (Html.BeginForm("Reindex", "LuceneSiteIndex", FormMethod.Post))
+                    {
+                        <div class="folder-section">
+                            <div class="mg-top-10">
+                                <input type="checkbox" id="checkAll" />
+                                <label>Select All</label>
+                            </div>
+                            @foreach (var item in siteList)
+                            {
+                                <div class="mg-top-10">
+                                    <input type="checkbox" name="siteId" id="siteId" value="@item.StartPage.ID" />
+                                    <label>@item.Name</label>
+                                </div>
+                            }
+                        </div>
+                        <div class="clear"></div>
+                        <button type="submit" value="Start Job" class="mg-top-10">Index Sites</button>
+                        <button type="button" onclick="window.location.href ='/cms/admin/LuceneSiteIndex/ResetIndex'" class="mg-top-10" style="margin-left: 20px;">Reset Index Folder</button>
+                        <button type="button" onclick="window.location.href ='/cms/admin/LuceneSiteIndex/GetIndexSize'" class="mg-top-10" style="margin-left: 20px;">Get Index Folder Size</button>
+                    }
+                }
+            </div>
+                }
+            </div>
+        </div>
+    </div>
+    <script>
+        var checkbox = document.getElementById('checkAll');
+        if (checkbox) {
+            checkbox.addEventListener('click', function () {
+                var allCheckBoxes = document.querySelectorAll('input[name="siteId"]');
+                for (var i = 0; i < allCheckBoxes.length; i++) {
+                    allCheckBoxes[i].checked = checkbox.checked;
+                }
+            });
+        }
+    </script>
+</body>
+</html>
