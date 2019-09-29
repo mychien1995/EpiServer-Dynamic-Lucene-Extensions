@@ -14,9 +14,11 @@ using EPiServer.DynamicLuceneExtensions.Models;
 using EPiServer.DynamicLuceneExtensions.Models.Indexing;
 using System;
 using System.Collections.Generic;
+using System.Configuration;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Web;
 
 namespace EPiServer.DynamicLuceneExtensions.Repositories
 {
@@ -28,8 +30,10 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
         void RemoveContentIndex(IContent content, bool includeChild = false);
         void RemoveContentLanguageBranch(IContent content);
         ContentIndexResult ReindexSite(IContent siteRoot);
+        ContentIndexResult ReindexSiteForRecovery(IContent siteRoot);
 
-        void ResetIndexDirectory(string folderPath);
+        void ResetIndexDirectory();
+        long GetIndexFolderSize();
     }
 
     [ServiceConfiguration(typeof(IContentIndexRepository))]
@@ -323,21 +327,90 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
             return ContentIndexHelpers.GetIndexFieldName(fieldName);
         }
 
-        public virtual void ResetIndexDirectory(string folderPath)
+        public virtual void ResetIndexDirectory()
         {
-            string[] files = System.IO.Directory.GetFiles(folderPath);
-            foreach (string file in files)
+            try
             {
-                File.Delete(file);
-            }
-            var fsDirectory = FSDirectory.Open(folderPath);
-            if (!DirectoryReader.IndexExists(fsDirectory))
-            {
-                using (new IndexWriter(fsDirectory, new StandardAnalyzer(LuceneConfiguration.LuceneVersion), true, IndexWriter.MaxFieldLength.UNLIMITED))
+                string folderPath = ConfigurationManager.AppSettings["lucene:BlobConnectionString"];
+                var serverPath = HttpRuntime.AppDomainAppPath;
+                folderPath = serverPath + folderPath;
+                var fsDirectory = FSDirectory.Open(folderPath);
+                if (IndexWriter.IsLocked(fsDirectory))
                 {
+                    IndexWriter.Unlock(fsDirectory);
+                }
+                string[] files = System.IO.Directory.GetFiles(folderPath);
+                foreach (string file in files)
+                {
+                    File.Delete(file);
+                }
+                if (!DirectoryReader.IndexExists(fsDirectory))
+                {
+                    using (new IndexWriter(fsDirectory, new StandardAnalyzer(LuceneConfiguration.LuceneVersion), true, IndexWriter.MaxFieldLength.UNLIMITED))
+                    {
 
+                    }
                 }
             }
+            catch (Exception ex)
+            {
+                _logger.Error("ResetIndexDirectory error", ex);
+            }
+        }
+
+        public virtual long GetIndexFolderSize()
+        {
+            string folderPath = ConfigurationManager.AppSettings["lucene:BlobConnectionString"];
+            var serverPath = HttpRuntime.AppDomainAppPath;
+            folderPath = serverPath + folderPath;
+            if (System.IO.Directory.Exists(folderPath))
+            {
+                DirectoryInfo dir = new DirectoryInfo(folderPath);
+                dir.Refresh();
+                long size = 0;
+                string[] files = System.IO.Directory.GetFiles(folderPath);
+                foreach (string file in files)
+                {
+                    if (!File.Exists(file)) continue;
+                    FileInfo details = new FileInfo(file);
+                    if (details != null)
+                    {
+                        details.Refresh();
+                        size += details.Length;
+                    }
+                }
+                return size;
+            }
+            return -1;
+        }
+
+        public ContentIndexResult ReindexSiteForRecovery(IContent siteRoot)
+        {
+            SlimContentReader slimContentReader = new SlimContentReader(this._contentRepository, siteRoot.ContentLink, (c =>
+            {
+                return true;
+            }));
+            var listDocument = new List<SearchDocument>();
+            while (slimContentReader.Next())
+            {
+                if (!slimContentReader.Current.ContentLink.CompareToIgnoreWorkID(ContentReference.RootPage))
+                {
+                    IVersionable current = slimContentReader.Current as IVersionable;
+                    if (current == null || current.Status == VersionStatus.Published)
+                    {
+                        if (LuceneConfiguration.CanIndexContent(slimContentReader.Current))
+                        {
+                            var document = GetDocFromContent(slimContentReader.Current);
+                            if (document != null)
+                            {
+                                listDocument.Add(document);
+                            }
+                        }
+                    }
+                }
+            }
+            _documentRepository.ReindexSiteForRecovery(listDocument, siteRoot.ContentGuid);
+            return new ContentIndexResult();
         }
     }
 }

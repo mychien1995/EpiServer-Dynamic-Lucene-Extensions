@@ -84,7 +84,9 @@ namespace EPiServer.DynamicLuceneExtensions.Services
                     loaderOptions.Add<LanguageLoaderOption>(LanguageLoaderOption.Fallback((CultureInfo)null));
                 }
                 LoaderOptions settings = loaderOptions;
-                return this._contentRepository.Get<TTarget>(result, settings);
+                TTarget content = null;
+                this._contentRepository.TryGet<TTarget>(result, settings, out content);
+                return content;
             }
             return default(TTarget);
         }

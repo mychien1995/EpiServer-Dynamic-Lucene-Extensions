@@ -24,11 +24,11 @@ namespace EPiServer.DynamicLuceneExtensions.Business.Indexing
         private readonly IIndexingHandler _indexingHandler;
         private readonly IDocumentRepository _documentRepository;
         private readonly ILog _logger = LogManager.GetLogger(typeof(LuceneSiteIndexHandler));
-        public LuceneSiteIndexHandler(IContentRepository contentRepository, IIndexingHandler indexingHandler
+        public LuceneSiteIndexHandler(IContentRepository contentRepository
             , IDocumentRepository documentRepository)
         {
             _contentRepository = contentRepository;
-            _indexingHandler = indexingHandler;
+            _indexingHandler = new IndexingHandler();
             _documentRepository = documentRepository;
         }
 

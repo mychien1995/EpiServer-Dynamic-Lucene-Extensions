@@ -22,6 +22,8 @@ namespace EPiServer.DynamicLuceneExtensions.Models.Indexing
         public const string REMOVE_LANGUAGE = "removelang";
         public const string REINDEXSITE = "reindexsite";
         public const string RESETINDEX = "resetindex";
+        public const string CALCULATESIZE = "calculate";
+        public const string RECOVERINDEX = "recover";
 
         public virtual string RemoteRequest
         {
@@ -49,9 +51,29 @@ namespace EPiServer.DynamicLuceneExtensions.Models.Indexing
         {
             if (string.IsNullOrEmpty(remoteFormat)) return null;
             var sections = remoteFormat.Split('|');
-            if (sections.Length > 1 && sections[0] == RESETINDEX)
+            if (sections.Length > 0 && sections[0] == RESETINDEX)
             {
-                return new ResetIndexRequestItem(sections[1]);
+                if (sections.Length == 1)
+                    return new ResetIndexRequestItem();
+                else
+                {
+                    var machineId = Guid.Parse(sections[1]);
+                    return new ResetIndexRequestItem(machineId);
+                }
+            }
+            if (sections.Length > 0 && sections[0] == RECOVERINDEX)
+            {
+                if (sections.Length == 1)
+                    return new RecoverIndexRequestItem();
+                else
+                {
+                    var machineId = Guid.Parse(sections[1]);
+                    return new RecoverIndexRequestItem(machineId);
+                }
+            }
+            if (sections.Length > 0 && sections[0] == CALCULATESIZE)
+            {
+                return new GetIndexSizeRequestItem();
             }
             if (sections.Length < 3) return null;
             int contentId;
@@ -62,7 +84,7 @@ namespace EPiServer.DynamicLuceneExtensions.Models.Indexing
             if (contentRepo == null) return null;
             IContent content;
             if (!contentRepo.TryGet<IContent>(new ContentReference(contentId), out content)) return null;
-            var actionList = new List<string>() { REINDEX, REMOVE, REMOVE_LANGUAGE, REINDEXSITE, RESETINDEX };
+            var actionList = new List<string>() { REINDEX, REMOVE, REMOVE_LANGUAGE, REINDEXSITE, RESETINDEX, RECOVERINDEX, CALCULATESIZE };
             if (!actionList.Contains(action)) return null;
             if (!bool.TryParse(sections[2], out includeChild)) return null;
             return new IndexRequestItem(content, action, includeChild);
@@ -73,13 +95,55 @@ namespace EPiServer.DynamicLuceneExtensions.Models.Indexing
 
     public class ResetIndexRequestItem : IndexRequestItem
     {
-        public string FolderPath { get; set; }
-        public ResetIndexRequestItem(string path)
+        public Guid? TargetMachine { get; set; }
+        public ResetIndexRequestItem()
         {
-            FolderPath = path;
             Action = RESETINDEX;
         }
-        public override string RemoteRequest => Action + "|" + FolderPath;
+        public ResetIndexRequestItem(Guid? targetMachine)
+        {
+            Action = RESETINDEX;
+            TargetMachine = targetMachine;
+        }
+        public override string RemoteRequest
+        {
+            get
+            {
+                if (TargetMachine != Guid.Empty && TargetMachine != null) return Action + "|" + TargetMachine;
+                return Action;
+            }
+        }
+    }
+
+    public class GetIndexSizeRequestItem : IndexRequestItem
+    {
+        public GetIndexSizeRequestItem()
+        {
+            Action = CALCULATESIZE;
+        }
+        public override string RemoteRequest => Action;
+    }
+
+    public class RecoverIndexRequestItem : IndexRequestItem
+    {
+        public Guid? TargetMachine { get; set; }
+        public RecoverIndexRequestItem()
+        {
+            Action = RECOVERINDEX;
+        }
+        public RecoverIndexRequestItem(Guid? targetMachine)
+        {
+            Action = RECOVERINDEX;
+            TargetMachine = targetMachine;
+        }
+        public override string RemoteRequest
+        {
+            get
+            {
+                if (TargetMachine != Guid.Empty && TargetMachine != null) return Action + "|" + TargetMachine;
+                return Action;
+            }
+        }
     }
 
 }

@@ -42,6 +42,7 @@ namespace EPiServer.DynamicLuceneExtensions.Initializations
     {
         private static object _lock = new object();
         private readonly Lazy<IContentIndexRepository> _contentIndexRepository = new Lazy<IContentIndexRepository>(() => ServiceLocator.Current.GetInstance<IContentIndexRepository>());
+        private readonly Lazy<IRemoteContentIndexRepository> _remoteContentIndexRepository = new Lazy<IRemoteContentIndexRepository>(() => ServiceLocator.Current.GetInstance<IRemoteContentIndexRepository>());
         private readonly Lazy<IContentRepository> _contentRepository = new Lazy<IContentRepository>(() => ServiceLocator.Current.GetInstance<IContentRepository>());
         private readonly Lazy<IIndexingHandler> _indexingHandler = new Lazy<IIndexingHandler>(() => ServiceLocator.Current.GetInstance<IIndexingHandler>());
 
@@ -60,6 +61,9 @@ namespace EPiServer.DynamicLuceneExtensions.Initializations
             contentEvents.DeletedContent += new EventHandler<DeleteContentEventArgs>(DeleteContent);
             contentEvents.DeletedContentLanguage += new EventHandler<ContentEventArgs>(DeleteContentLanguage);
             securityRepository.ContentSecuritySaved += new EventHandler<ContentSecurityEventArg>(UpdateSecurity);
+            _indexingHandler.Value.Init();
+            _remoteContentIndexRepository.Value.Init();
+            DoingHealthCheck();
         }
 
         public void Uninitialize(InitializationEngine context)
@@ -73,13 +77,26 @@ namespace EPiServer.DynamicLuceneExtensions.Initializations
             contentEvents.DeletedContentLanguage -= new EventHandler<ContentEventArgs>(DeleteContentLanguage);
             securityRepository.ContentSecuritySaved -= new EventHandler<ContentSecurityEventArg>(UpdateSecurity);
         }
-
+        private void DoingHealthCheck()
+        {
+            Task.Run(() =>
+            {
+                var indexHealthCheckService = ServiceLocator.Current.GetInstance<IIndexHealthCheckService>();
+                var indexRecoveryService = ServiceLocator.Current.GetInstance<IIndexRecoveryService>();
+                string message;
+                if (!indexHealthCheckService.IsHealthyIndex(out message))
+                {
+                    indexRecoveryService.RecoverIndex(true);
+                }
+            });
+        }
         private void PublishContent(object sender, ContentEventArgs e)
         {
             Task.Run(() =>
             {
                 if (SiteCreationServiceBase.IsSettingUpSite()) return;
-                _indexingHandler.Value.ProcessRequest(new IndexRequestItem(e.Content));
+                if (LuceneConfiguration.CanIndexContent(e.Content))
+                    _indexingHandler.Value.ProcessRequest(new IndexRequestItem(e.Content));
             });
 
         }
@@ -89,7 +106,8 @@ namespace EPiServer.DynamicLuceneExtensions.Initializations
             Task.Run(() =>
             {
                 if (SiteCreationServiceBase.IsSettingUpSite()) return;
-                _indexingHandler.Value.ProcessRequest(new IndexRequestItem(e.Content));
+                if (LuceneConfiguration.CanIndexContent(e.Content))
+                    _indexingHandler.Value.ProcessRequest(new IndexRequestItem(e.Content));
             });
         }
 
@@ -99,7 +117,8 @@ namespace EPiServer.DynamicLuceneExtensions.Initializations
             {
                 if (SiteCreationServiceBase.IsSettingUpSite()) return;
                 var content = _contentRepository.Value.Get<IContent>(e.ContentLink);
-                _indexingHandler.Value.ProcessRequest(new IndexRequestItem(content));
+                if (LuceneConfiguration.CanIndexContent(content))
+                    _indexingHandler.Value.ProcessRequest(new IndexRequestItem(content));
             });
         }
 
@@ -108,7 +127,8 @@ namespace EPiServer.DynamicLuceneExtensions.Initializations
             Task.Run(() =>
             {
                 if (SiteCreationServiceBase.IsSettingUpSite()) return;
-                _indexingHandler.Value.ProcessRequest(new IndexRequestItem(e.Content, IndexRequestItem.REMOVE, true));
+                if (LuceneConfiguration.CanIndexContent(e.Content))
+                    _indexingHandler.Value.ProcessRequest(new IndexRequestItem(e.Content, IndexRequestItem.REMOVE, true));
             });
         }
 
@@ -117,7 +137,8 @@ namespace EPiServer.DynamicLuceneExtensions.Initializations
             Task.Run(() =>
             {
                 if (SiteCreationServiceBase.IsSettingUpSite()) return;
-                _indexingHandler.Value.ProcessRequest(new IndexRequestItem(e.Content, IndexRequestItem.REMOVE_LANGUAGE));
+                if (LuceneConfiguration.CanIndexContent(e.Content))
+                    _indexingHandler.Value.ProcessRequest(new IndexRequestItem(e.Content, IndexRequestItem.REMOVE_LANGUAGE));
             });
         }
     }

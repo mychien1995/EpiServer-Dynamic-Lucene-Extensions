@@ -117,6 +117,7 @@ namespace EPiServer.DynamicLuceneExtensions.Configurations
 
         public static bool CanIndexContent(IContent content)
         {
+            if (content == null) return false;
             if (IndexAllTypes) return true;
             return IncludedTypes.Any(c => c.Value.ContentType.IsAssignableFrom(content.GetOriginalType()));
         }
@@ -131,7 +132,7 @@ namespace EPiServer.DynamicLuceneExtensions.Configurations
                     return;
                 try
                 {
-                    LuceneSection section = (LuceneSection)ConfigurationManager.GetSection("lucene.indexing");
+                    LuceneSection section = (LuceneSection)ConfigurationManager.GetSection("episerver.lucene.indexing");
                     _indexAllTypes = section.IndexAllTypes;
                     _isActive = section.Active;
                     if (_isActive == null || !_isActive.Value)

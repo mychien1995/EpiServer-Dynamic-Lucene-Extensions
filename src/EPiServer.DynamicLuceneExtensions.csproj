@@ -253,6 +253,7 @@
     <Compile Include="Configurations\IncludedTypesCollection.cs" />
     <Compile Include="Configurations\IncludeFieldsCollection.cs" />
     <Compile Include="Configurations\LuceneConfiguration.cs" />
+    <Compile Include="Configurations\LuceneContext.cs" />
     <Compile Include="Configurations\LuceneSection.cs" />
     <Compile Include="Constants.cs" />
     <Compile Include="Controllers\Admin\LuceneSiteIndexController.cs" />
@@ -276,6 +277,7 @@
     <Compile Include="Models\Search\IQueryExpression.cs" />
     <Compile Include="Models\Search\SearchResults.cs" />
     <Compile Include="Models\Search\SortOptions.cs" />
+    <Compile Include="Models\ServerInfomation.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Queries\AccessControlListQuery.cs" />
     <Compile Include="Queries\AllQuery.cs" />
@@ -290,10 +292,15 @@
     <Compile Include="Repositories\IDocumentRepository.cs" />
     <Compile Include="Indexing\ComputedFields\DefaultComputedField.cs" />
     <Compile Include="Repositories\IRemoteContentIndexRepository.cs" />
+    <Compile Include="Repositories\NonTransactionalContentIndexRepository.cs" />
+    <Compile Include="Repositories\NonTransactionalDocumentRepository.cs" />
+    <Compile Include="Services\IIndexHealthCheckService.cs" />
     <Compile Include="Services\IIndexingHandler.cs" />
+    <Compile Include="Services\IIndexRecoveryService.cs" />
     <Compile Include="Services\QueryBuilder.cs" />
     <Compile Include="Services\ISearchHandler.cs" />
     <Compile Include="Services\DocumentParser.cs" />
+    <Compile Include="Services\QueuedIndexingHandler.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

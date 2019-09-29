@@ -26,8 +26,7 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
         void Optimize();
         void UpdateBatchIndex(List<SearchDocument> documents);
         void ReindexSite(List<SearchDocument> documents, Guid siteRootId);
-
-        long GetIndexFolderSize(string folderPath);
+        void ReindexSiteForRecovery(List<SearchDocument> documents, Guid siteRootId);
     }
 
     [ServiceConfiguration(typeof(IDocumentRepository))]
@@ -43,28 +42,6 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
             if (collection.Count > 0)
                 return collection[0].Document;
             return null;
-        }
-        public virtual long GetIndexFolderSize(string folderPath)
-        {
-            if (System.IO.Directory.Exists(folderPath))
-            {
-                DirectoryInfo dir = new DirectoryInfo(folderPath);
-                dir.Refresh();
-                long size = 0;
-                string[] files = System.IO.Directory.GetFiles(folderPath);
-                foreach (string file in files)
-                {
-                    if (!File.Exists(file)) continue;
-                    FileInfo details = new FileInfo(file);
-                    if (details != null)
-                    {
-                        details.Refresh();
-                        size += details.Length;
-                    }
-                }
-                return size;
-            }
-            return -1;
         }
 
         public virtual Collection<SearchDocument> SearchByField(string fieldname, string value, int maxHits, out int totalHits)
@@ -95,6 +72,7 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
 
         public virtual void WriteToIndex(SearchDocument document)
         {
+            if (!LuceneContext.AllowIndexing) return;
             try
             {
                 lock (_writeLock)
@@ -113,6 +91,7 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
 
         public virtual void DeleteFromIndex(List<string> itemIds)
         {
+            if (!LuceneContext.AllowIndexing) return;
             try
             {
                 lock (_writeLock)
@@ -141,6 +120,7 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
 
         public virtual void UpdateBatchIndex(List<SearchDocument> documents)
         {
+            if (!LuceneContext.AllowIndexing) return;
             var deletedList = new List<SearchDocument>();
             var itemIds = documents.Select(x => x.Id).ToList();
             try
@@ -171,9 +151,75 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
             {
                 _logger.Error("Lucene Search Error", ex);
             }
+            finally
+            {
+                if (IndexWriter.IsLocked(LuceneConfiguration.Directory))
+                {
+                    IndexWriter.Unlock(LuceneConfiguration.Directory);
+                }
+            }
         }
 
         public virtual void ReindexSite(List<SearchDocument> documents, Guid siteRootId)
+        {
+            if (!LuceneContext.AllowIndexing) return;
+            var deletedList = new List<SearchDocument>();
+            try
+            {
+                lock (_writeLock)
+                {
+                    BooleanQuery.MaxClauseCount = int.MaxValue;
+                    var fieldName = ContentIndexHelpers.GetIndexFieldName(Constants.INDEX_FIELD_NAME_VIRTUAL_PATH);
+                    var siteRoot = "*" + LuceneQueryHelper.Escape(siteRootId.ToString().ToLower().Replace(" ", "")) + "*";
+                    var siteRootQuery = $"{fieldName}:{siteRoot}";
+                    var queryParser = new QueryParser(LuceneConfiguration.LuceneVersion, fieldName, LuceneConfiguration.Analyzer);
+                    queryParser.AllowLeadingWildcard = true;
+                    var deleteQuery = queryParser.Parse(siteRootQuery);
+                    using (IndexWriter indexWriter = new IndexWriter(LuceneConfiguration.Directory, LuceneConfiguration.Analyzer, false, IndexWriter.MaxFieldLength.UNLIMITED))
+                    {
+                        indexWriter.SetMergeScheduler(new SerialMergeScheduler());
+                        indexWriter.DeleteDocuments(deleteQuery);
+                        foreach (var document in documents)
+                        {
+                            indexWriter.AddDocument(document.Document);
+                        }
+                        indexWriter.Commit();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Lucene Search Error", ex);
+            }
+            finally
+            {
+                if (IndexWriter.IsLocked(LuceneConfiguration.Directory))
+                {
+                    IndexWriter.Unlock(LuceneConfiguration.Directory);
+                }
+            }
+        }
+
+        public virtual void Optimize()
+        {
+            try
+            {
+                if (!LuceneContext.AllowIndexing) return;
+                lock (_writeLock)
+                {
+                    using (IndexWriter indexWriter = new IndexWriter(LuceneConfiguration.Directory, LuceneConfiguration.Analyzer, false, IndexWriter.MaxFieldLength.UNLIMITED))
+                    {
+                        indexWriter.Optimize();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Lucene Search Error", ex);
+            }
+        }
+
+        public void ReindexSiteForRecovery(List<SearchDocument> documents, Guid siteRootId)
         {
             var deletedList = new List<SearchDocument>();
             try
@@ -203,23 +249,12 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
             {
                 _logger.Error("Lucene Search Error", ex);
             }
-        }
-
-        public virtual void Optimize()
-        {
-            try
+            finally
             {
-                lock (_writeLock)
+                if (IndexWriter.IsLocked(LuceneConfiguration.Directory))
                 {
-                    using (IndexWriter indexWriter = new IndexWriter(LuceneConfiguration.Directory, LuceneConfiguration.Analyzer, false, IndexWriter.MaxFieldLength.UNLIMITED))
-                    {
-                        indexWriter.Optimize();
-                    }
+                    IndexWriter.Unlock(LuceneConfiguration.Directory);
                 }
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("Lucene Search Error", ex);
             }
         }
     }

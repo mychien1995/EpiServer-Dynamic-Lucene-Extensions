@@ -5,6 +5,7 @@
 }
 @using EPiServer.Core
 @using EPiServer.Web
+@using EPiServer.DynamicLuceneExtensions.Models
 <!DOCTYPE html>
 <html>
 <head>
@@ -28,47 +29,108 @@
             color: red;
             margin-top: 10px;
         }
+
+        tr.active {
+            background-color: #fcf003;
+        }
     </style>
 </head>
 <body>
     <div class="epi-padding">
         <div class="epi-contentContainer epi-fullWidth">
             <div class="epi-formArea">
+                @if (ViewBag.DataTable != null)
+                {
+                    <h2>Statuses</h2>
+                    var status = (IEnumerable<ServerInfomation>)ViewBag.DataTable;
+                    <table class="epi-default">
+                        <thead>
+                            <tr>
+                                <th class="epitableheading">
+                                    Server Name
+                                </th>
+                                <th class="epitableheading">
+                                    Index Size (KB)
+                                </th>
+                                <th class="epitableheading">
+                                    Event Id
+                                </th>
+                                <th>
+                                    In health checking
+                                </th>
+                                <th>
+                                    In recovering
+                                </th>
+                                <th class="epitableheading">
+                                    Action
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in status)
+                            {
+                                var active = "";
+                                if (ViewBag.CurrentServer != null && ViewBag.CurrentServer == item.LocalRaiserId)
+                                {
+                                    active = "active";
+                                }
+                                <tr class="@active">
+                                    <td>@item.Name</td>
+                                    <td>@(item.IndexSize / 1024)</td>
+                                    <td>@item.LocalRaiserId</td>
+                                    <td>@item.InHealthChecking</td>
+                                    <td>@item.InRecovering</td>
+                                    <td>
+                                        <button type="button" onclick="window.location.href ='/cms/admin/LuceneSiteIndex/ResetIndex?targetId=@item.LocalRaiserId&machineName=@item.Name'">
+                                            Reset Index
+                                        </button>
+                                        <button type="button" onclick="recover('@item.LocalRaiserId','@item.Name')">
+                                            Recover Index
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    <button type="button" onclick="window.location.href ='/cms/admin/LuceneSiteIndex/Index'">Back</button>
+                    <button type="button" onclick="refreshTable()" class="mg-top-10" style="margin-left: 20px;">Refresh Table (File system)</button>
+                }
                 @if (ViewBag.Message != null)
                 {
                     <h2>Result</h2>
                     <div id="jobStatus" class="EP-systemMessage" style="display: block;">
                         @Html.Raw(ViewBag.Message)
                     </div>
+                    <button type="button" onclick="window.location.href ='/cms/admin/LuceneSiteIndex/Index'">Back</button>
                 }
                 @if (ViewBag.SiteList != null)
                 {
-            <div class="epi-size15">
-                @{
-                    var siteList = (List<SiteDefinition>)ViewBag.SiteList;
-                    <h2>Select a site to reindex</h2>
-                    using (Html.BeginForm("Reindex", "LuceneSiteIndex", FormMethod.Post))
-                    {
-                        <div class="folder-section">
-                            <div class="mg-top-10">
-                                <input type="checkbox" id="checkAll" />
-                                <label>Select All</label>
-                            </div>
-                            @foreach (var item in siteList)
+                    <div class="epi-size15">
+                        @{
+                            var siteList = (List<SiteDefinition>)ViewBag.SiteList;
+                            <h2>Select a site to reindex</h2>
+                            using (Html.BeginForm("Reindex", "LuceneSiteIndex", FormMethod.Post))
                             {
-                                <div class="mg-top-10">
-                                    <input type="checkbox" name="siteId" id="siteId" value="@item.StartPage.ID" />
-                                    <label>@item.Name</label>
+                                <div class="folder-section">
+                                    <div class="mg-top-10">
+                                        <input type="checkbox" id="checkAll" />
+                                        <label>Select All</label>
+                                    </div>
+                                    @foreach (var item in siteList)
+                                    {
+                                        <div class="mg-top-10">
+                                            <input type="checkbox" name="siteId" id="siteId" value="@item.StartPage.ID" />
+                                            <label>@item.Name</label>
+                                        </div>
+                                    }
                                 </div>
+                                <div class="clear"></div>
+                                <button type="submit" value="Start Job" class="mg-top-10">Index Sites</button>
+                                <button type="button" onclick="window.location.href ='/cms/admin/LuceneSiteIndex/CheckStatus'" class="mg-top-10" style="margin-left: 20px;">Check Status</button>
+                                <button type="button" onclick="window.location.href ='/cms/admin/LuceneSiteIndex/ResetIndex'" class="mg-top-10" style="margin-left: 20px;">Reset Index Folder (File system)</button>
                             }
-                        </div>
-                        <div class="clear"></div>
-                        <button type="submit" value="Start Job" class="mg-top-10">Index Sites</button>
-                        <button type="button" onclick="window.location.href ='/cms/admin/LuceneSiteIndex/ResetIndex'" class="mg-top-10" style="margin-left: 20px;">Reset Index Folder</button>
-                        <button type="button" onclick="window.location.href ='/cms/admin/LuceneSiteIndex/GetIndexSize'" class="mg-top-10" style="margin-left: 20px;">Get Index Folder Size</button>
-                    }
-                }
-            </div>
+                        }
+                    </div>
                 }
             </div>
         </div>
@@ -83,6 +145,20 @@
                 }
             });
         }
+        function recover(machineId, machineName) {
+            var r = confirm('This function will reset the index folder then reindex all, are you sure you want to do this');
+            if (r === true) {
+                window.location.href = '/cms/admin/LuceneSiteIndex/RecoverIndex?targetId=' + machineId + '&machineName=' + machineName + '';
+            }
+        }
+        function refreshTable() {
+            var url = '/cms/admin/LuceneSiteIndex/GetIndexSize';
+            var xmlHttp = new XMLHttpRequest();
+            xmlHttp.open("GET", url, true);
+            xmlHttp.send(null);
+            window.location.reload();
+        }
+
     </script>
 </body>
 </html>
