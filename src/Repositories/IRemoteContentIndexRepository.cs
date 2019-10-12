@@ -12,6 +12,8 @@ using System.IO;
 using EPiServer.Data.Dynamic;
 using EPiServer.DynamicLuceneExtensions.Models;
 using EPiServer.DynamicLuceneExtensions.Services;
+using EPiServer.DynamicLuceneExtensions.Configurations;
+using Lucene.Net.Store;
 
 namespace EPiServer.DynamicLuceneExtensions.Repositories
 {
@@ -48,26 +50,35 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
         public void IndexContent(IContent content, bool includeChild = false)
         {
             _contentIndexRepository.IndexContent(content, includeChild);
-            var indexRequest = new IndexRequestItem(content, IndexRequestItem.REINDEX, includeChild);
-            var param = indexRequest.RemoteRequest;
-            this._eventService.Get(IndexContentEventId).RaiseAsync(LocalRaiserId, param, EventRaiseOption.RaiseBroadcast);
+            if (ShouldRaiseEvent)
+            {
+                var indexRequest = new IndexRequestItem(content, IndexRequestItem.REINDEX, includeChild);
+                var param = indexRequest.RemoteRequest;
+                this._eventService.Get(IndexContentEventId).RaiseAsync(LocalRaiserId, param, EventRaiseOption.RaiseBroadcast);
+            }
         }
 
         public void RemoveContentIndex(IContent content, bool includeChild = false)
         {
             _contentIndexRepository.RemoveContentIndex(content, includeChild);
-            var indexRequest = new IndexRequestItem(content, IndexRequestItem.REMOVE, includeChild);
-            var param = indexRequest.RemoteRequest;
-            this._eventService.Get(IndexContentEventId).RaiseAsync(LocalRaiserId, param, EventRaiseOption.RaiseBroadcast);
+            if (ShouldRaiseEvent)
+            {
+                var indexRequest = new IndexRequestItem(content, IndexRequestItem.REMOVE, includeChild);
+                var param = indexRequest.RemoteRequest;
+                this._eventService.Get(IndexContentEventId).RaiseAsync(LocalRaiserId, param, EventRaiseOption.RaiseBroadcast);
+            }
         }
 
 
         public void ReindexSite(IContent content)
         {
             _contentIndexRepository.ReindexSite(content);
-            var indexRequest = new IndexRequestItem(content, IndexRequestItem.REINDEXSITE, true);
-            var param = indexRequest.RemoteRequest;
-            this._eventService.Get(IndexContentEventId).RaiseAsync(LocalRaiserId, param, EventRaiseOption.RaiseBroadcast);
+            if (ShouldRaiseEvent)
+            {
+                var indexRequest = new IndexRequestItem(content, IndexRequestItem.REINDEXSITE, true);
+                var param = indexRequest.RemoteRequest;
+                this._eventService.Get(IndexContentEventId).RaiseAsync(LocalRaiserId, param, EventRaiseOption.RaiseBroadcast);
+            }
         }
         public virtual void ResetIndexDirectory(Guid? targetMachine = null)
         {
@@ -75,7 +86,7 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
             {
                 _contentIndexRepository.ResetIndexDirectory();
             }
-            else
+            else if (ShouldRaiseEvent)
             {
                 var param = new ResetIndexRequestItem(targetMachine).RemoteRequest;
                 this._eventService.Get(IndexContentEventId).RaiseAsync(LocalRaiserId, param, EventRaiseOption.RaiseBroadcast);
@@ -88,10 +99,18 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
             {
                 _indexRecoveryService.RecoverIndex(true);
             }
-            else
+            else if (ShouldRaiseEvent)
             {
                 var param = new RecoverIndexRequestItem(targetMachine).RemoteRequest;
                 this._eventService.Get(IndexContentEventId).RaiseAsync(LocalRaiserId, param, EventRaiseOption.RaiseBroadcast);
+            }
+        }
+
+        private bool ShouldRaiseEvent
+        {
+            get
+            {
+                return LuceneContext.ShouldRaiseRemoteEvent;
             }
         }
 
@@ -99,17 +118,18 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
         {
             var folderSize = _contentIndexRepository.GetIndexFolderSize();
             var param = new GetIndexSizeRequestItem().RemoteRequest;
-            DynamicDataStore store = typeof(ServerInfomation).GetOrCreateStore();
-            store.DeleteAll();
-            store.Save(new ServerInfomation()
-            {
-                IndexSize = folderSize,
-                LocalRaiserId = LocalRaiserId,
-                Name = Environment.MachineName,
-                InRecovering = IndexRecoveryService.IN_RECOVERING,
-                InHealthChecking = IndexHealthCheckService.IS_HEALTH_CHECK
-            });
-            this._eventService.Get(IndexContentEventId).RaiseAsync(LocalRaiserId, param, EventRaiseOption.RaiseBroadcast);
+            //var store = new SqlDataStore<ServerInfomation>();
+            //store.DeleteAll();
+            //store.Save(new ServerInfomation()
+            //{
+            //    IndexSize = folderSize,
+            //    LocalRaiserId = LocalRaiserId,
+            //    Name = Environment.MachineName,
+            //    InRecovering = IndexRecoveryService.IN_RECOVERING,
+            //    InHealthChecking = IndexHealthCheckService.IS_HEALTH_CHECK
+            //});
+            if (ShouldRaiseEvent)
+                this._eventService.Get(IndexContentEventId).RaiseAsync(LocalRaiserId, param, EventRaiseOption.RaiseBroadcast);
             return folderSize;
         }
 
@@ -145,7 +165,7 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
                     break;
                 case IndexRequestItem.CALCULATESIZE:
                     var folderSize = _contentIndexRepository.GetIndexFolderSize();
-                    DynamicDataStore store = typeof(ServerInfomation).GetOrCreateStore();
+                    var store = typeof(ServerInfomation).GetOrCreateStore();
                     store.Save(new ServerInfomation()
                     {
                         IndexSize = folderSize,
@@ -186,8 +206,11 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
 
         public void Init()
         {
-            Event @event = this._eventService.Get(IndexContentEventId);
-            @event.Raised += new EventNotificationHandler(this.IndexContent_Raised);
+            if (ShouldRaiseEvent)
+            {
+                Event @event = this._eventService.Get(IndexContentEventId);
+                @event.Raised += new EventNotificationHandler(this.IndexContent_Raised);
+            }
         }
     }
 }

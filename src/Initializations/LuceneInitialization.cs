@@ -81,6 +81,7 @@ namespace EPiServer.DynamicLuceneExtensions.Initializations
         {
             Task.Run(() =>
             {
+                if (LuceneContext.DirectoryType != Constants.ContainerType.FileSystem) return;
                 var indexHealthCheckService = ServiceLocator.Current.GetInstance<IIndexHealthCheckService>();
                 var indexRecoveryService = ServiceLocator.Current.GetInstance<IIndexRecoveryService>();
                 string message;

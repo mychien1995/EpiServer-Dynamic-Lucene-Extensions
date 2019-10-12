@@ -18,12 +18,12 @@ namespace EPiServer.DynamicLuceneExtensions.Services
     [ServiceConfiguration(typeof(IIndexHealthCheckService), Lifecycle = ServiceInstanceScope.Singleton)]
     public class IndexHealthCheckService : IIndexHealthCheckService
     {
-        public static bool IS_HEALTH_CHECK = true;
+        public static bool IS_HEALTH_CHECK = false;
         private static object _lock = new object();
         public IndexHealthCheckService()
         {
             //make sure that no indexing is occured before this turned off
-            IS_HEALTH_CHECK = false;
+            //IS_HEALTH_CHECK = false;
         }
         public bool IsHealthyIndex(out string message)
         {

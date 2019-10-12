@@ -11,7 +11,6 @@ namespace EPiServer.DynamicLuceneExtensions.Extensions
     {
         public static void ParallelDownloadBlob(this ICloudBlob blob, Stream outPutStream)
         {
-            blob.FetchAttributes();
             int bufferLength = 1 * 1024 * 1024;//1 MB chunk
             long blobRemainingLength = blob.Properties.Length;
             Queue<KeyValuePair<long, long>> queues = new Queue<KeyValuePair<long, long>>();
@@ -49,6 +48,24 @@ namespace EPiServer.DynamicLuceneExtensions.Extensions
                 outPutStream.Position = trunk.OffSet;
                 outPutStream.Write(trunk.Data, 0, trunk.Data.Length);
             }
+        }
+
+        public static void FastFetchAttribute(this ICloudBlob blob)
+        {
+            var streamRequestCondition = new BlobRequestOptions()
+            {
+                ParallelOperationThreadCount = 5
+            };
+            blob.FetchAttributes(null, streamRequestCondition, null);
+        }
+
+        public static void FastUpload(this ICloudBlob blob, Stream fromSource)
+        {
+            var streamRequestCondition = new BlobRequestOptions()
+            {
+                ParallelOperationThreadCount = 5
+            };
+            blob.UploadFromStream(fromSource, null, streamRequestCondition, null);
         }
     }
 

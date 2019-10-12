@@ -59,5 +59,24 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
                 _indexWriter.DeleteDocuments(deleteQueries.ToArray());
             }
         }
+
+        public override void ReindexSite(List<SearchDocument> documents, Guid siteRootId)
+        {
+            lock (_writeLock)
+            {
+                BooleanQuery.MaxClauseCount = int.MaxValue;
+                var fieldName = ContentIndexHelpers.GetIndexFieldName(Constants.INDEX_FIELD_NAME_VIRTUAL_PATH);
+                var siteRoot = "*" + LuceneQueryHelper.Escape(siteRootId.ToString().ToLower().Replace(" ", "")) + "*";
+                var siteRootQuery = $"{fieldName}:{siteRoot}";
+                var queryParser = new QueryParser(LuceneConfiguration.LuceneVersion, fieldName, LuceneConfiguration.Analyzer);
+                queryParser.AllowLeadingWildcard = true;
+                var deleteQuery = queryParser.Parse(siteRootQuery);
+                _indexWriter.DeleteDocuments(deleteQuery);
+                foreach (var document in documents)
+                {
+                    _indexWriter.AddDocument(document.Document);
+                }
+            }
+        }
     }
 }

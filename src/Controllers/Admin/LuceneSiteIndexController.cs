@@ -111,8 +111,8 @@ namespace EPiServer.DynamicLuceneExtensions.Controllers.Admin
         [HttpGet]
         public ActionResult CheckStatus()
         {
-            DynamicDataStore store = typeof(ServerInfomation).GetOrCreateStore();
-            ViewBag.DataTable = store.LoadAll<ServerInfomation>();
+            var store = typeof(ServerInfomation).GetOrCreateStore();
+            ViewBag.DataTable = store.LoadAll();
             ViewBag.CurrentServer = RemoteContentIndexRepository.LocalRaiserId;
             return View("~/Views/admin/LuceneSiteIndex/Index.cshtml");
         }

@@ -3,18 +3,21 @@ using EPiServer.Core;
 using Lucene.Net.Analysis;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Index;
+using Lucene.Net.Search;
 using Lucene.Net.Store;
 using Microsoft.WindowsAzure.Storage;
 using EPiServer.DynamicLuceneExtensions.AzureDirectoryExtend;
 using EPiServer.DynamicLuceneExtensions.Helpers;
 using EPiServer.DynamicLuceneExtensions.Indexing;
 using EPiServer.DynamicLuceneExtensions.Indexing.ComputedFields;
+using EPiServer.DynamicLuceneExtensions.Models;
 using EPiServer.DynamicLuceneExtensions.Models.Indexing;
 using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Directory = Lucene.Net.Store.Directory;
 using Version = Lucene.Net.Util.Version;
 namespace EPiServer.DynamicLuceneExtensions.Configurations
@@ -31,7 +34,6 @@ namespace EPiServer.DynamicLuceneExtensions.Configurations
         private static Directory _directory;
         private static string _luceneVersion;
         private static Analyzer _analyzer;
-
         public static bool Active
         {
             get
@@ -132,7 +134,7 @@ namespace EPiServer.DynamicLuceneExtensions.Configurations
                     return;
                 try
                 {
-                    LuceneSection section = (LuceneSection)ConfigurationManager.GetSection("episerver.lucene.indexing");
+                    LuceneSection section = (LuceneSection)ConfigurationManager.GetSection("lucene.indexing");
                     _indexAllTypes = section.IndexAllTypes;
                     _isActive = section.Active;
                     if (_isActive == null || !_isActive.Value)
@@ -192,6 +194,15 @@ namespace EPiServer.DynamicLuceneExtensions.Configurations
                     }
                     _analyzer = fieldAnalyzerWrapper;
                     AddDefaultFieldAnalyzer();
+                    var shardingStrategy = section.Sharding?.Strategy;
+                    if (!string.IsNullOrEmpty(shardingStrategy))
+                    {
+                        var shardingType = Type.GetType(shardingStrategy, true, true);
+                        LuceneContext.IndexShardingStrategy = (IIndexShardingStrategy)Activator.CreateInstance(shardingType);
+                        LuceneContext.IndexShardingStrategy.WarmupShards();
+                        return;
+                    }
+                    Directory directory;
                     var directoryConnectionString = ConfigurationManager.AppSettings["lucene:BlobConnectionString"] ?? "App_Data/My_Index";
                     var directoryContainerName = ConfigurationManager.AppSettings["lucene:ContainerName"] ?? "lucene";
                     var directoryType = (ConfigurationManager.AppSettings["lucene:DirectoryType"] ?? "Filesystem").ToLower();
@@ -202,14 +213,15 @@ namespace EPiServer.DynamicLuceneExtensions.Configurations
                             var containerName = directoryContainerName;
                             var storageAccount = CloudStorageAccount.Parse(connectionString);
                             var azureDir = new FastAzureDirectory(storageAccount, containerName, new RAMDirectory());
-                            _directory = azureDir;
+                            directory = azureDir;
                             break;
                         default:
                             var folderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, directoryConnectionString);
                             var fsDirectory = FSDirectory.Open(folderPath);
-                            _directory = fsDirectory;
+                            directory = fsDirectory;
                             break;
                     }
+                    _directory = directory;
                     InitDirectory(_directory);
                 }
                 catch (Exception ex)

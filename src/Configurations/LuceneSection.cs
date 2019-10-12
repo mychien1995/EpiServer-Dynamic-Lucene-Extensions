@@ -68,5 +68,14 @@ namespace EPiServer.DynamicLuceneExtensions.Configurations
                 return (IncludedTypesCollection)this["includedTypes"];
             }
         }
+
+        [ConfigurationProperty("sharding")]
+        public IndexShardingElement Sharding
+        {
+            get
+            {
+                return (IndexShardingElement)this["sharding"];
+            }
+        }
     }
 }

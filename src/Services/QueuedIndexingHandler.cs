@@ -17,13 +17,13 @@ namespace EPiServer.DynamicLuceneExtensions.Services
         private static readonly ILogger _logger = LogManager.GetLogger(typeof(QueuedIndexingHandler));
         private static ConcurrentQueue<IndexRequestItem> _requestQueue = new ConcurrentQueue<IndexRequestItem>();
         private static Timer _queueProcessTimer;
-        private static int BatchSize = 100;
-        private static int MaximumQueueSize = 50000;
+        private static int BatchSize = 200;
+        private static int MaximumQueueSize = 100000;
         public static readonly Guid LocalRaiserId = Guid.NewGuid();
         public static readonly Guid IndexContentEventId = new Guid("c3dbffe3-81b4-4a80-9c7f-8ec91a8397ec");
         private readonly IEventRegistry _eventService;
 
-        private readonly double _timerInterval = 20000;
+        private readonly double _timerInterval = 15000;
         private readonly IIndexingHandler _localIndexingHandler;
         private static object _lock = new object();
         public QueuedIndexingHandler(IEventRegistry eventRegistry)
@@ -48,7 +48,10 @@ namespace EPiServer.DynamicLuceneExtensions.Services
         {
             if (request == null || !IsAvailable()) return;
             _requestQueue.Enqueue(request);
-            this._eventService.Get(IndexContentEventId).RaiseAsync(LocalRaiserId, request.RemoteRequest, EventRaiseOption.RaiseBroadcast);
+            if (ShouldRaiseEvent)
+            {
+                this._eventService.Get(IndexContentEventId).RaiseAsync(LocalRaiserId, request.RemoteRequest, EventRaiseOption.RaiseBroadcast);
+            }
             _queueProcessTimer.Enabled = true;
         }
 
@@ -116,8 +119,19 @@ namespace EPiServer.DynamicLuceneExtensions.Services
 
         public void Init()
         {
-            Event @event = this._eventService.Get(IndexContentEventId);
-            @event.Raised += new EventNotificationHandler(this.IndexContent_Raised);
+            if (ShouldRaiseEvent)
+            {
+                Event @event = this._eventService.Get(IndexContentEventId);
+                @event.Raised += new EventNotificationHandler(this.IndexContent_Raised);
+            }
+        }
+
+        private bool ShouldRaiseEvent
+        {
+            get
+            {
+                return LuceneContext.ShouldRaiseRemoteEvent;
+            }
         }
     }
 }

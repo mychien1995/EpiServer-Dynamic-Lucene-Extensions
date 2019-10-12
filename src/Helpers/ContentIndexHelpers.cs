@@ -34,20 +34,19 @@ namespace EPiServer.DynamicLuceneExtensions.Helpers
             var _contentRepository = ServiceLocator.Current.GetInstance<IContentRepository>();
             Collection<string> collection = new Collection<string>();
             foreach (IContent parent in _contentRepository.GetAncestors(content.ContentLink).Reverse())
-                collection.Add(parent.ContentGuid.ToString());
-            collection.Add(content.ContentGuid.ToString());
+                collection.Add(parent.ContentLink.ID.ToString());
+            collection.Add(content.ContentLink.ID.ToString());
             return collection;
         }
-
         public static ICollection<string> GetVirtualPathNodes(ContentReference contentLink)
         {
             var _contentRepository = ServiceLocator.Current.GetInstance<IContentRepository>();
             Collection<string> collection = new Collection<string>();
             foreach (IContent content in _contentRepository.GetAncestors(contentLink).Reverse<IContent>())
-                collection.Add(content.ContentGuid.ToString());
+                collection.Add(content.ContentLink.ID.ToString());
             IContent content1 = _contentRepository.Get<IContent>(contentLink);
-            collection.Add(content1.ContentGuid.ToString());
-            return (ICollection<string>)collection;
+            collection.Add(content1.ContentLink.ID.ToString());
+            return collection;
         }
 
         public static string GetContentACL(IContent content)

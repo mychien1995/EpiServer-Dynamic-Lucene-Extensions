@@ -3,6 +3,7 @@ using EPiServer.Core;
 using EPiServer.Logging.Compatibility;
 using EPiServer.ServiceLocation;
 using EPiServer.DynamicLuceneExtensions.Configurations;
+using EPiServer.DynamicLuceneExtensions.Helpers;
 using EPiServer.DynamicLuceneExtensions.Models.Indexing;
 using EPiServer.DynamicLuceneExtensions.Repositories;
 using EPiServer.DynamicLuceneExtensions.Services;
@@ -25,10 +26,10 @@ namespace EPiServer.DynamicLuceneExtensions.Business.Indexing
         private readonly IDocumentRepository _documentRepository;
         private readonly ILog _logger = LogManager.GetLogger(typeof(LuceneSiteIndexHandler));
         public LuceneSiteIndexHandler(IContentRepository contentRepository
-            , IDocumentRepository documentRepository)
+            , IDocumentRepository documentRepository, IIndexingHandler indexingHandler)
         {
             _contentRepository = contentRepository;
-            _indexingHandler = new IndexingHandler();
+            _indexingHandler = indexingHandler;
             _documentRepository = documentRepository;
         }
 
@@ -43,19 +44,37 @@ namespace EPiServer.DynamicLuceneExtensions.Business.Indexing
             }
             foreach (var siteId in siteStartPageIds)
             {
-                var siteRoot = _contentRepository.Get<PageData>(new ContentReference(siteId));
-                if (siteRoot == null) continue;
-                try
+                PageData siteRoot;
+                if (_contentRepository.TryGet<PageData>(new ContentReference(siteId), out siteRoot))
                 {
-                    _indexingHandler.ProcessRequest(new IndexRequestItem(siteRoot, IndexRequestItem.REINDEXSITE, true));
+                    if (siteRoot == null) continue;
+                    try
+                    {
+                        SlimContentReader slimContentReader = new SlimContentReader(this._contentRepository, siteRoot.ContentLink, (c =>
+                        {
+                            return true;
+                        }));
+                        while (slimContentReader.Next())
+                        {
+                            var currentContent = slimContentReader.Current;
+                            if (currentContent != null && !currentContent.ContentLink.CompareToIgnoreWorkID(ContentReference.RootPage))
+                            {
+                                if (LuceneConfiguration.CanIndexContent(currentContent))
+                                {
+                                    _indexingHandler.ProcessRequest(new IndexRequestItem(currentContent));
+                                }
+                            }
+                        }
+
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Error($"Lucene Index Site Error: {siteRoot.ContentLink.ID} - {siteRoot.Name}", e);
+                        progress.AppendLine($"{siteRoot.ContentLink.ID} - {siteRoot.Name} index failed </br>");
+                        continue;
+                    }
+                    progress.AppendLine($"Site: {siteRoot.ContentLink.ID} - {siteRoot.Name} indexed; </br>");
                 }
-                catch (Exception e)
-                {
-                    _logger.Error($"Lucene Index Site Error: {siteRoot.ContentLink.ID} - {siteRoot.Name}", e);
-                    progress.AppendLine($"{siteRoot.ContentLink.ID} - {siteRoot.Name} index failed </br>");
-                    continue;
-                }
-                progress.AppendLine($"Site: {siteRoot.ContentLink.ID} - {siteRoot.Name} indexed; </br>");
             }
             progress.AppendLine("Indexing completed</br>");
             return progress.ToString();

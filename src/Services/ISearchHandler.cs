@@ -4,6 +4,7 @@ using EPiServer.ServiceLocation;
 using Lucene.Net.Index;
 using Lucene.Net.QueryParsers;
 using Lucene.Net.Search;
+using Lucene.Net.Store;
 using EPiServer.DynamicLuceneExtensions.Configurations;
 using EPiServer.DynamicLuceneExtensions.Helpers;
 using EPiServer.DynamicLuceneExtensions.Models.Search;
@@ -17,9 +18,12 @@ namespace EPiServer.DynamicLuceneExtensions.Services
 {
     public interface ISearchHandler
     {
-        SearchResults<T> GetSearchResults<T>(IQueryExpression expression, int pageIndex, int pageSize, SortOptions sortOption = null) where T : DocumentIndexModel;
+        SearchResults<T> GetSearchResults<T>(IQueryExpression expression, int pageIndex, int pageSize, SortOptions sortOption = null, Directory directory = null) where T : DocumentIndexModel;
+
+        SearchResults<T> GetSearchResults<T>(IQueryExpression expression, int pageIndex, int pageSize, string shardName, SortOptions sortOption = null) where T : DocumentIndexModel;
+        List<SearchFacet> GetSearchFacets(IQueryExpression expression, string shardName, string[] groupByFields);
         TTarget GetContent<TTarget>(DocumentIndexModel indexItem, bool filterOnCulture = true) where TTarget : ContentData;
-        List<SearchFacet> GetSearchFacets(IQueryExpression expression, string[] groupByFields);
+        List<SearchFacet> GetSearchFacets(IQueryExpression expression, string[] groupByFields, Directory directory = null);
     }
 
     [ServiceConfiguration(typeof(ISearchHandler))]
@@ -30,13 +34,20 @@ namespace EPiServer.DynamicLuceneExtensions.Services
         {
             _contentRepository = contentRepository;
         }
-
-        public virtual SearchResults<T> GetSearchResults<T>(IQueryExpression expression, int pageIndex, int pageSize, SortOptions sortOption = null) where T : DocumentIndexModel
+        public virtual SearchResults<T> GetSearchResults<T>(IQueryExpression expression, int pageIndex, int pageSize, string shardName, SortOptions sortOption = null) where T : DocumentIndexModel
         {
+            if (LuceneContext.IndexShardingStrategy == null) return GetSearchResults<T>(expression, pageIndex, pageSize, sortOption);
+            var directory = LuceneContext.IndexShardingStrategy.GetOrCreateShard(shardName)?.Directory;
+            if (directory == null) return null;
+            return GetSearchResults<T>(expression, pageIndex, pageSize, sortOption, directory);
+        }
+
+        public virtual SearchResults<T> GetSearchResults<T>(IQueryExpression expression, int pageIndex, int pageSize, SortOptions sortOption = null, Directory directory = null)
+            where T : DocumentIndexModel
+        {
+            if (directory == null) directory = LuceneContext.Directory;
             var result = new SearchResults<T>();
-            var readLock = new ReaderWriterLockSlim();
-            readLock.EnterReadLock();
-            using (IndexSearcher indexSearcher = new IndexSearcher(LuceneConfiguration.Directory, true))
+            using (IndexSearcher indexSearcher = new IndexSearcher(directory, true))
             {
                 Sort luceneSortOption = new Sort();
                 if (sortOption != null)
@@ -44,8 +55,10 @@ namespace EPiServer.DynamicLuceneExtensions.Services
                     luceneSortOption = new Sort(sortOption.Fields.Select(x =>
                     new Lucene.Net.Search.SortField(ContentIndexHelpers.GetIndexFieldName(x.FieldName), x.FieldType, x.Reverse)).ToArray());
                 }
-                var query = new MultiFieldQueryParser(LuceneConfiguration.LuceneVersion, expression.GetFieldName()
-                    , LuceneConfiguration.Analyzer).Parse(expression.GetExpression());
+                var queryParser = new MultiFieldQueryParser(LuceneConfiguration.LuceneVersion, expression.GetFieldName()
+                    , LuceneConfiguration.Analyzer);
+                queryParser.AllowLeadingWildcard = true;
+                var query = queryParser.Parse(expression.GetExpression());
                 TopDocs topDocs = indexSearcher.Search(query, null, int.MaxValue, luceneSortOption);
                 result.TotalHits = topDocs.TotalHits;
                 ScoreDoc[] scoreDocs = topDocs.ScoreDocs;
@@ -62,7 +75,6 @@ namespace EPiServer.DynamicLuceneExtensions.Services
                     }
                 }
             }
-            readLock.ExitReadLock();
             return result;
         }
 
@@ -90,17 +102,17 @@ namespace EPiServer.DynamicLuceneExtensions.Services
             }
             return default(TTarget);
         }
-
-        public virtual List<SearchFacet> GetSearchFacets(IQueryExpression expression, string[] groupByFields)
+        public virtual List<SearchFacet> GetSearchFacets(IQueryExpression expression, string[] groupByFields, Directory directory = null)
         {
+            if (directory == null) directory = LuceneContext.Directory;
             groupByFields = groupByFields.Select(x => ContentIndexHelpers.GetIndexFieldName(x)).ToArray();
             var result = new List<SearchFacet>();
-            var readLock = new ReaderWriterLockSlim();
-            readLock.EnterReadLock();
-            using (IndexReader indexReader = IndexReader.Open(LuceneConfiguration.Directory, true))
+            using (IndexReader indexReader = IndexReader.Open(directory, true))
             {
-                var query = new MultiFieldQueryParser(LuceneConfiguration.LuceneVersion, expression.GetFieldName()
-                     , LuceneConfiguration.Analyzer).Parse(expression.GetExpression());
+                var queryParser = new MultiFieldQueryParser(LuceneConfiguration.LuceneVersion, expression.GetFieldName()
+                     , LuceneConfiguration.Analyzer);
+                queryParser.AllowLeadingWildcard = true;
+                var query = queryParser.Parse(expression.GetExpression());
                 SimpleFacetedSearch facetSearch = new SimpleFacetedSearch(indexReader, groupByFields);
                 SimpleFacetedSearch.Hits hits = facetSearch.Search(query, int.MaxValue);
                 long totalHits = hits.TotalHitCount;
@@ -114,8 +126,15 @@ namespace EPiServer.DynamicLuceneExtensions.Services
                     });
                 }
             }
-            readLock.ExitReadLock();
             return result;
+        }
+
+        public virtual List<SearchFacet> GetSearchFacets(IQueryExpression expression, string shardName, string[] groupByFields)
+        {
+            if (LuceneContext.IndexShardingStrategy == null) return GetSearchFacets(expression, groupByFields);
+            var directory = LuceneContext.IndexShardingStrategy.GetOrCreateShard(shardName)?.Directory;
+            if (directory == null) return null;
+            return GetSearchFacets(expression, groupByFields, directory);
         }
 
         private LoaderOptions GetLoaderOptions(string languageCode)

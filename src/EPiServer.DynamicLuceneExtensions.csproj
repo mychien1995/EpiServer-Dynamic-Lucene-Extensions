@@ -244,6 +244,7 @@
     <Compile Include="Attributes\IndexFieldNameAttribute.cs" />
     <Compile Include="AzureDirectoryExtend\FastAzureDirectory.cs" />
     <Compile Include="AzureDirectoryExtend\FastAzureIndexInput.cs" />
+    <Compile Include="AzureDirectoryExtend\FastAzureIndexOutput.cs" />
     <Compile Include="Business\Indexing\SiteIndexHandler.cs" />
     <Compile Include="Business\ScheduledJobRunners\LuceneSiteIndexJobRunner.cs" />
     <Compile Include="Business\ScheduledJob\LuceneSiteIndexScheduledJob.cs" />
@@ -252,6 +253,7 @@
     <Compile Include="Configurations\IncludedTypeElement.cs" />
     <Compile Include="Configurations\IncludedTypesCollection.cs" />
     <Compile Include="Configurations\IncludeFieldsCollection.cs" />
+    <Compile Include="Configurations\IndexShardingElement.cs" />
     <Compile Include="Configurations\LuceneConfiguration.cs" />
     <Compile Include="Configurations\LuceneContext.cs" />
     <Compile Include="Configurations\LuceneSection.cs" />
@@ -269,9 +271,11 @@
     <Compile Include="Initializations\LuceneInitialization.cs" />
     <Compile Include="Indexing\ComputedFields\BooleanField.cs" />
     <Compile Include="Indexing\ComputedField.cs" />
+    <Compile Include="Models\IIndexShardingStrategy.cs" />
     <Compile Include="Models\Indexing\ContentIndexResult.cs" />
     <Compile Include="Models\Indexing\ContentTypeDocument.cs" />
     <Compile Include="Models\Indexing\IndexRequestItem.cs" />
+    <Compile Include="Models\IndexShard.cs" />
     <Compile Include="Models\Search\DocumentIndexModel.cs" />
     <Compile Include="Models\SearchDocument.cs" />
     <Compile Include="Models\Search\IQueryExpression.cs" />

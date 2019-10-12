@@ -12,7 +12,7 @@ namespace EPiServer.DynamicLuceneExtensions.AzureDirectoryExtend
     /// </summary>
     public class FastAzureIndexInput : IndexInput
     {
-        private static long ticks1970 = new DateTime(1970, 1, 1, 0, 0, 0).Ticks / 10000L;
+        public static long ticks1970 = new DateTime(1970, 1, 1, 0, 0, 0).Ticks / 10000L;
         private AzureDirectory _azureDirectory;
         private CloudBlobContainer _blobContainer;
         private ICloudBlob _blob;
@@ -25,6 +25,122 @@ namespace EPiServer.DynamicLuceneExtensions.AzureDirectoryExtend
             get
             {
                 return this._azureDirectory.CacheDirectory;
+            }
+        }
+        public FastAzureIndexInput(AzureDirectory azuredirectory, BlobMeta blobMeta)
+        {
+            this._name = blobMeta.Name;
+            this._fileMutex = BlobMutexManager.GrabMutex(this._name);
+            this._fileMutex.WaitOne();
+            try
+            {
+                this._azureDirectory = azuredirectory;
+                this._blobContainer = azuredirectory.BlobContainer;
+                this._blob = blobMeta.Blob;
+                string name = this._name;
+                bool flag = false;
+                if (!this.CacheDirectory.FileExists(name))
+                {
+                    flag = true;
+                }
+                else
+                {
+                    long num = this.CacheDirectory.FileLength(name);
+                    long result1 = blobMeta.Length;
+                    DateTime dateTime = blobMeta.LastModified;
+                    if (num != result1)
+                    {
+                        flag = true;
+                    }
+                    else
+                    {
+                        long ticks = this.CacheDirectory.FileModified(name);
+                        if (ticks > FastAzureIndexInput.ticks1970)
+                            ticks -= FastAzureIndexInput.ticks1970;
+                        DateTime universalTime = new DateTime(ticks, DateTimeKind.Local).ToUniversalTime();
+                        if (universalTime != dateTime && dateTime.Subtract(universalTime).TotalSeconds > 1.0)
+                            flag = true;
+                    }
+                }
+                if (flag)
+                {
+                    StreamOutput cachedOutputAsStream = this._azureDirectory.CreateCachedOutputAsStream(name);
+                    this._blob.ParallelDownloadBlob((Stream)cachedOutputAsStream);
+                    cachedOutputAsStream.Flush();
+                    cachedOutputAsStream.Close();
+                    this._indexInput = this.CacheDirectory.OpenInput(name);
+                }
+                else
+                    this._indexInput = this.CacheDirectory.OpenInput(name);
+            }
+            finally
+            {
+                this._fileMutex.ReleaseMutex();
+            }
+        }
+        public FastAzureIndexInput(AzureDirectory azuredirectory, ICloudBlob blob, out BlobMeta meta)
+        {
+            meta = new BlobMeta();
+            this._name = blob.Uri.Segments[blob.Uri.Segments.Length - 1];
+            this._fileMutex = BlobMutexManager.GrabMutex(this._name);
+            this._fileMutex.WaitOne();
+            try
+            {
+                this._azureDirectory = azuredirectory;
+                this._blobContainer = azuredirectory.BlobContainer;
+                this._blob = blob;
+                string name = this._name;
+                bool flag = false;
+                if (!this.CacheDirectory.FileExists(name))
+                {
+                    flag = true;
+                }
+                else
+                {
+                    long num = this.CacheDirectory.FileLength(name);
+                    long result1 = blob.Properties.Length;
+                    long.TryParse(blob.Metadata["CachedLength"], out result1);
+                    long result2 = 0;
+                    DateTime dateTime = blob.Properties.LastModified.Value.UtcDateTime;
+                    if (long.TryParse(blob.Metadata["CachedLastModified"], out result2))
+                    {
+                        if (result2 > FastAzureIndexInput.ticks1970)
+                            result2 -= FastAzureIndexInput.ticks1970;
+                        dateTime = new DateTime(result2).ToUniversalTime();
+                    }
+                    if (num != result1)
+                    {
+                        flag = true;
+                    }
+                    else
+                    {
+                        long ticks = this.CacheDirectory.FileModified(name);
+                        if (ticks > FastAzureIndexInput.ticks1970)
+                            ticks -= FastAzureIndexInput.ticks1970;
+                        DateTime universalTime = new DateTime(ticks, DateTimeKind.Local).ToUniversalTime();
+                        if (universalTime != dateTime && dateTime.Subtract(universalTime).TotalSeconds > 1.0)
+                            flag = true;
+                    }
+                    meta.Name = this._name;
+                    meta.LastModified = dateTime;
+                    meta.Length = result1;
+                    meta.Blob = blob;
+                }
+                if (flag)
+                {
+                    StreamOutput cachedOutputAsStream = this._azureDirectory.CreateCachedOutputAsStream(name);
+                    this._blob.ParallelDownloadBlob((Stream)cachedOutputAsStream);
+                    cachedOutputAsStream.Flush();
+                    cachedOutputAsStream.Close();
+                    this._indexInput = this.CacheDirectory.OpenInput(name);
+                }
+                else
+                    this._indexInput = this.CacheDirectory.OpenInput(name);
+                meta.HasData = true;
+            }
+            finally
+            {
+                this._fileMutex.ReleaseMutex();
             }
         }
 

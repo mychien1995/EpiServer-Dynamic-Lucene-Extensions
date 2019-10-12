@@ -51,7 +51,7 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
             try
             {
                 Query query = new QueryParser(LuceneConfiguration.LuceneVersion, fieldname, LuceneConfiguration.Analyzer).Parse(value);
-                using (IndexSearcher indexSearcher = new IndexSearcher(LuceneConfiguration.Directory, true))
+                using (IndexSearcher indexSearcher = new IndexSearcher(LuceneContext.Directory, true))
                 {
                     TopDocs topDocs = indexSearcher.Search(query, maxHits);
                     totalHits = topDocs.TotalHits;
@@ -77,7 +77,7 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
             {
                 lock (_writeLock)
                 {
-                    using (IndexWriter indexWriter = new IndexWriter(LuceneConfiguration.Directory, LuceneConfiguration.Analyzer, false, IndexWriter.MaxFieldLength.UNLIMITED))
+                    using (IndexWriter indexWriter = new IndexWriter(LuceneContext.Directory, LuceneConfiguration.Analyzer, false, IndexWriter.MaxFieldLength.UNLIMITED))
                     {
                         indexWriter.AddDocument(document.Document);
                     }
@@ -104,7 +104,7 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
                             .Parse(deletedDoc);
                         deleteQueries.Add(deleteQuery);
                     }
-                    using (IndexWriter indexWriter = new IndexWriter(LuceneConfiguration.Directory, LuceneConfiguration.Analyzer, false, IndexWriter.MaxFieldLength.UNLIMITED))
+                    using (IndexWriter indexWriter = new IndexWriter(LuceneContext.Directory, LuceneConfiguration.Analyzer, false, IndexWriter.MaxFieldLength.UNLIMITED))
                     {
                         indexWriter.SetMergeScheduler(new SerialMergeScheduler());
                         indexWriter.DeleteDocuments(deleteQueries.ToArray());
@@ -135,7 +135,7 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
                             .Parse(deletedDoc);
                         deleteQueries.Add(deleteQuery);
                     }
-                    using (IndexWriter indexWriter = new IndexWriter(LuceneConfiguration.Directory, LuceneConfiguration.Analyzer, false, IndexWriter.MaxFieldLength.UNLIMITED))
+                    using (IndexWriter indexWriter = new IndexWriter(LuceneContext.Directory, LuceneConfiguration.Analyzer, false, IndexWriter.MaxFieldLength.UNLIMITED))
                     {
                         indexWriter.SetMergeScheduler(new SerialMergeScheduler());
                         indexWriter.DeleteDocuments(deleteQueries.ToArray());
@@ -153,9 +153,9 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
             }
             finally
             {
-                if (IndexWriter.IsLocked(LuceneConfiguration.Directory))
+                if (IndexWriter.IsLocked(LuceneContext.Directory))
                 {
-                    IndexWriter.Unlock(LuceneConfiguration.Directory);
+                    IndexWriter.Unlock(LuceneContext.Directory);
                 }
             }
         }
@@ -175,7 +175,7 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
                     var queryParser = new QueryParser(LuceneConfiguration.LuceneVersion, fieldName, LuceneConfiguration.Analyzer);
                     queryParser.AllowLeadingWildcard = true;
                     var deleteQuery = queryParser.Parse(siteRootQuery);
-                    using (IndexWriter indexWriter = new IndexWriter(LuceneConfiguration.Directory, LuceneConfiguration.Analyzer, false, IndexWriter.MaxFieldLength.UNLIMITED))
+                    using (IndexWriter indexWriter = new IndexWriter(LuceneContext.Directory, LuceneConfiguration.Analyzer, false, IndexWriter.MaxFieldLength.UNLIMITED))
                     {
                         indexWriter.SetMergeScheduler(new SerialMergeScheduler());
                         indexWriter.DeleteDocuments(deleteQuery);
@@ -193,9 +193,9 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
             }
             finally
             {
-                if (IndexWriter.IsLocked(LuceneConfiguration.Directory))
+                if (IndexWriter.IsLocked(LuceneContext.Directory))
                 {
-                    IndexWriter.Unlock(LuceneConfiguration.Directory);
+                    IndexWriter.Unlock(LuceneContext.Directory);
                 }
             }
         }
@@ -207,7 +207,7 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
                 if (!LuceneContext.AllowIndexing) return;
                 lock (_writeLock)
                 {
-                    using (IndexWriter indexWriter = new IndexWriter(LuceneConfiguration.Directory, LuceneConfiguration.Analyzer, false, IndexWriter.MaxFieldLength.UNLIMITED))
+                    using (IndexWriter indexWriter = new IndexWriter(LuceneContext.Directory, LuceneConfiguration.Analyzer, false, IndexWriter.MaxFieldLength.UNLIMITED))
                     {
                         indexWriter.Optimize();
                     }
@@ -233,7 +233,7 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
                     var queryParser = new QueryParser(LuceneConfiguration.LuceneVersion, fieldName, LuceneConfiguration.Analyzer);
                     queryParser.AllowLeadingWildcard = true;
                     var deleteQuery = queryParser.Parse(siteRootQuery);
-                    using (IndexWriter indexWriter = new IndexWriter(LuceneConfiguration.Directory, LuceneConfiguration.Analyzer, false, IndexWriter.MaxFieldLength.UNLIMITED))
+                    using (IndexWriter indexWriter = new IndexWriter(LuceneContext.Directory, LuceneConfiguration.Analyzer, false, IndexWriter.MaxFieldLength.UNLIMITED))
                     {
                         indexWriter.SetMergeScheduler(new SerialMergeScheduler());
                         indexWriter.DeleteDocuments(deleteQuery);
@@ -251,9 +251,9 @@ namespace EPiServer.DynamicLuceneExtensions.Repositories
             }
             finally
             {
-                if (IndexWriter.IsLocked(LuceneConfiguration.Directory))
+                if (IndexWriter.IsLocked(LuceneContext.Directory))
                 {
-                    IndexWriter.Unlock(LuceneConfiguration.Directory);
+                    IndexWriter.Unlock(LuceneContext.Directory);
                 }
             }
         }

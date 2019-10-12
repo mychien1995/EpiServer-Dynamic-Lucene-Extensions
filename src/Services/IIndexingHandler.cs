@@ -1,13 +1,16 @@
 ﻿using EPiServer.ServiceLocation;
 using Lucene.Net.Index;
+using Lucene.Net.Store;
 using Lucene.Net.Store.Azure;
 using EPiServer.DynamicLuceneExtensions.AzureDirectoryExtend;
 using EPiServer.DynamicLuceneExtensions.Configurations;
+using EPiServer.DynamicLuceneExtensions.Models;
 using EPiServer.DynamicLuceneExtensions.Models.Indexing;
 using EPiServer.DynamicLuceneExtensions.Repositories;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Web;
 
 namespace EPiServer.DynamicLuceneExtensions.Services
@@ -62,11 +65,15 @@ namespace EPiServer.DynamicLuceneExtensions.Services
                     break;
             }
         }
-
         public void ProcessRequests(IEnumerable<IndexRequestItem> requests)
         {
             if (!LuceneContext.AllowIndexing) return;
-            var directory = LuceneConfiguration.Directory;
+            if (LuceneContext.IndexShardingStrategy == null)
+                ProcessDirectoryRequests(requests, LuceneContext.Directory);
+            else ProcessShardRequests(requests);
+        }
+        public void ProcessDirectoryRequests(IEnumerable<IndexRequestItem> requests, Directory directory)
+        {
             using (IndexWriter indexWriter = new IndexWriter(directory, LuceneConfiguration.Analyzer, false, IndexWriter.MaxFieldLength.UNLIMITED))
             {
                 try
@@ -90,6 +97,9 @@ namespace EPiServer.DynamicLuceneExtensions.Services
                             case IndexRequestItem.REMOVE_LANGUAGE:
                                 indexRepository.RemoveContentIndex(request.Content, false);
                                 break;
+                            case IndexRequestItem.REINDEXSITE:
+                                indexRepository.ReindexSite(request.Content);
+                                break;
                             default:
                                 break;
                         }
@@ -108,6 +118,36 @@ namespace EPiServer.DynamicLuceneExtensions.Services
                     }
                 }
             }
+        }
+        public void ProcessShardRequests(IEnumerable<IndexRequestItem> requests)
+        {
+            var strategy = LuceneContext.IndexShardingStrategy;
+            var batchs = new Dictionary<IndexShard, List<IndexRequestItem>>();
+            foreach (var request in requests)
+            {
+                var shard = strategy.LocateShard(request);
+                if (shard != null)
+                {
+                    List<IndexRequestItem> shardRequests;
+                    if (batchs.TryGetValue(shard, out shardRequests))
+                    {
+                        shardRequests.Add(request);
+                    }
+                    else
+                    {
+                        batchs.Add(shard, new List<IndexRequestItem>() { request });
+                    }
+                }
+            }
+            var taskList = new List<Task>();
+            foreach (var item in batchs)
+            {
+                taskList.Add(Task.Run(() =>
+                {
+                    ProcessDirectoryRequests(item.Value, item.Key.Directory);
+                }));
+            }
+            Task.WaitAll(taskList.ToArray());
         }
     }
 }
